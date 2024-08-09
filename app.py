@@ -1,6 +1,6 @@
 import streamlit as st
 import PyPDF2
-from transformers import RagTokenizer, RagSequenceForGeneration
+from transformers import RagTokenizer, RagRetriever, RagSequenceForGeneration
 import torch
 
 # Set up the Streamlit interface
@@ -25,22 +25,21 @@ if uploaded_files:
     # Input question from the researcher
     question = st.text_input("Enter your question:")
 
-    # Load the RAG model (without retriever)
+    # Load the RAG model
     tokenizer = RagTokenizer.from_pretrained("facebook/rag-token-nq")
+    retriever = RagRetriever.from_pretrained("facebook/rag-token-nq", index_name="custom")
     model = RagSequenceForGeneration.from_pretrained("facebook/rag-token-nq")
 
     # Function to process question and retrieve answer
-    def answer_question(question):
-        # Just use the first document as context for simplicity
-        context = documents[0] if documents else ""
-        
-        inputs = tokenizer(question, context, return_tensors="pt", padding=True, truncation=True)
+    def answer_question(question, documents):
+        contexts = documents
+        inputs = tokenizer(question, contexts, return_tensors="pt", padding=True, truncation=True)
         outputs = model.generate(input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"])
         return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
     if st.button("Get Answer"):
         if question:
-            response = answer_question(question)
+            response = answer_question(question, documents)
             st.write("Answer:", response)
         else:
             st.write("Please enter a question.")
