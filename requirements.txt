@@ -4,3 +4,4 @@ transformers
 torch
 datasets
 faiss-cpu
+--upgrade transformers
