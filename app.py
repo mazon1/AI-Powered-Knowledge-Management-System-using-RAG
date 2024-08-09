@@ -1,7 +1,9 @@
 import streamlit as st
 import PyPDF2
-from transformers import RagTokenizer, RagRetriever, RagSequenceForGeneration
-import torch
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 
 # Set up the Streamlit interface
 st.title("AI-Powered Knowledge Management System")
@@ -11,8 +13,8 @@ st.write("Upload PDF documents containing practitioner knowledge and ask tailore
 def extract_text_from_pdf(file):
     pdf_reader = PyPDF2.PdfReader(file)
     text = ""
-    for page in range(len(pdf_reader.pages)):
-        text += pdf_reader.pages[page].extract_text()
+    for page in pdf_reader.pages:
+        text += page.extract_text()
     return text
 
 # Upload PDF
@@ -25,21 +27,38 @@ if uploaded_files:
     # Input question from the researcher
     question = st.text_input("Enter your question:")
 
-    # Load the RAG model
-    tokenizer = RagTokenizer.from_pretrained("facebook/rag-token-nq")
-    retriever = RagRetriever.from_pretrained("facebook/rag-token-nq", index_name="custom")
-    model = RagSequenceForGeneration.from_pretrained("facebook/rag-token-nq")
+    # Load models
+    @st.cache_resource
+    def load_models():
+        tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large-cnn")
+        model = AutoModelForSeq2SeqLM.from_pretrained("facebook/bart-large-cnn")
+        sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
+        return tokenizer, model, sentence_model
+
+    tokenizer, model, sentence_model = load_models()
 
     # Function to process question and retrieve answer
     def answer_question(question, documents):
-        contexts = documents
-        inputs = tokenizer(question, contexts, return_tensors="pt", padding=True, truncation=True)
-        outputs = model.generate(input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"])
-        return tokenizer.decode(outputs[0], skip_special_tokens=True)
+        # Encode the question and documents
+        question_embedding = sentence_model.encode([question])[0]
+        document_embeddings = sentence_model.encode(documents)
+
+        # Find the most similar document
+        similarities = cosine_similarity([question_embedding], document_embeddings)[0]
+        most_similar_idx = np.argmax(similarities)
+        context = documents[most_similar_idx]
+
+        # Generate answer
+        inputs = tokenizer([question + " " + context], max_length=1024, return_tensors="pt", truncation=True)
+        summary_ids = model.generate(inputs["input_ids"], num_beams=4, min_length=30, max_length=200)
+        return tokenizer.batch_decode(summary_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
 
     if st.button("Get Answer"):
         if question:
-            response = answer_question(question, documents)
-            st.write("Answer:", response)
+            with st.spinner("Generating answer..."):
+                response = answer_question(question, documents)
+                st.write("Answer:", response)
         else:
             st.write("Please enter a question.")
+else:
+    st.write("Please upload PDF files to proceed.")
