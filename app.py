@@ -1,14 +1,11 @@
-from elasticsearch import Elasticsearch
-from transformers import RagTokenizer, RagSequenceForGeneration
 import streamlit as st
 import PyPDF2
+from transformers import RagTokenizer, RagSequenceForGeneration
+import torch
 
 # Set up the Streamlit interface
 st.title("AI-Powered Knowledge Management System")
 st.write("Upload PDF documents containing practitioner knowledge and ask tailored questions.")
-
-# Initialize Elasticsearch
-es = Elasticsearch()
 
 # Process PDFs
 def extract_text_from_pdf(file):
@@ -25,24 +22,19 @@ if uploaded_files:
     documents = [extract_text_from_pdf(file) for file in uploaded_files]
     st.write("Extracted text from the uploaded PDFs.")
     
-    # Index the documents in Elasticsearch
-    for i, doc in enumerate(documents):
-        es.index(index="documents", id=i, document={"content": doc})
-    
     # Input question from the researcher
     question = st.text_input("Enter your question:")
 
-    # Load the RAG model
+    # Load the RAG model (without retriever)
     tokenizer = RagTokenizer.from_pretrained("facebook/rag-token-nq")
     model = RagSequenceForGeneration.from_pretrained("facebook/rag-token-nq")
 
     # Function to process question and retrieve answer
     def answer_question(question):
-        # Search Elasticsearch for relevant documents
-        results = es.search(index="documents", query={"match": {"content": question}})
-        contexts = [hit["_source"]["content"] for hit in results["hits"]["hits"]]
+        # Just use the first document as context for simplicity
+        context = documents[0] if documents else ""
         
-        inputs = tokenizer(question, contexts, return_tensors="pt", padding=True, truncation=True)
+        inputs = tokenizer(question, context, return_tensors="pt", padding=True, truncation=True)
         outputs = model.generate(input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"])
         return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
