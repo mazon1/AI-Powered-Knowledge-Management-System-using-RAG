@@ -12,10 +12,10 @@ uploaded_files = st.file_uploader("Choose PDF files", type="pdf", accept_multipl
 
 # Process PDFs
 def extract_text_from_pdf(file):
-    pdf_reader = PyPDF2.PdfFileReader(file)
+    pdf_reader = PyPDF2.PdfReader(file)  # Updated to use PdfReader
     text = ""
-    for page in range(pdf_reader.getNumPages()):
-        text += pdf_reader.getPage(page).extract_text()
+    for page in range(len(pdf_reader.pages)):
+        text += pdf_reader.pages[page].extract_text()
     return text
 
 if uploaded_files:
@@ -32,11 +32,8 @@ model = RagSequenceForGeneration.from_pretrained("facebook/rag-token-nq")
 
 # Function to process question and retrieve answer
 def answer_question(question, documents):
-    # Create context from documents
     contexts = documents
     inputs = tokenizer(question, contexts, return_tensors="pt", padding=True, truncation=True)
-    
-    # Generate response
     outputs = model.generate(input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"])
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
