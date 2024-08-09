@@ -2,5 +2,5 @@ streamlit
 PyPDF2
 transformers
 torch
-faiss-cpu   
-elasticsearch
+datasets
+faiss-cpu
